@@ -1,87 +1,90 @@
-import * as contactsService from '../services/contactsServices.js';
-import HttpError from '../helpers/HttpError.js';
+import {
+	listContacts,
+	getContactById,
+	removeContact,
+	addContact,
+	renewContact,
+	updateStatusContact,
+} from "../services/contactsServices.js";
 
-export const getAllContacts = async (req, res, next) => {
-	try {
-		const result = await contactsService.listContacts();
-		if (!result) {
-			throw HttpError(404);
-		}
-		res.status(200).json(result);
-	} catch (error) {
-		next(error);
+import HttpError from "../helpers/HttpError.js";
+import { ctrlWrapper } from "../decorators/ctrlWrapper.js";
+
+const getAllContacts = ctrlWrapper(async (req, res) => {
+	const { page = 1, limit = 20, favorite } = req.query;
+
+	const contactsList = await listContacts(
+		favorite !== undefined ? { favorite } : {},
+		{
+			page,
+			limit,
+		},
+	);
+
+	res.status(200).json(contactsList);
+});
+
+const getOneContact = ctrlWrapper(async (req, res) => {
+	const { id } = req.params;
+	const foundedContact = await getContactById(id);
+
+	if (!foundedContact) {
+		throw HttpError(404);
 	}
-};
+	res.status(200).json(foundedContact);
+});
 
-export const getOneContact = async (req, res, next) => {
-	try {
-		const { id } = req.params;
-		const result = await contactsService.getContactById(id);
-		if (!result) {
-			throw HttpError(404);
-		}
-		res.status(200).json(result);
-	} catch (error) {
-		next(error);
+const deleteContact = ctrlWrapper(async (req, res) => {
+	const { id } = req.params;
+
+	const removedContact = await removeContact(id);
+
+	if (!removedContact) {
+		throw HttpError(404);
 	}
-};
+	res.status(200).json(removedContact);
+});
 
-export const deleteContact = async (req, res, next) => {
-	try {
-		const { id } = req.params;
-		const result = await contactsService.removeContact(id);
-		if (!result) {
-			throw HttpError(404);
-		}
-		res.json({
-			"removed": !!result,
-		});
-	} catch (error) {
-		next(error);
+const createContact = ctrlWrapper(async (req, res) => {
+	const { id } = req.user.dataValues;
+	const addedContact = await addContact({ ...req.body, owner: id });
+
+	res.status(201).json(addedContact);
+});
+
+const updateContact = ctrlWrapper(async (req, res) => {
+	if (Object.keys(req.body).length === 0) {
+		throw HttpError(400, "Body must have at least one field");
 	}
-};
 
-export const createContact = async (req, res, next) => {
-	try {
-		const result = await contactsService.addContact(req.body);
-		res.status(201).json(result);
-	} catch (error) {
-		next(error);
+	const { id } = req.params;
+
+	const updatedContact = await renewContact(id, req.body);
+
+	if (!updatedContact) {
+		throw HttpError(404);
 	}
-};
 
-export const updateContact = async (req, res, next) => {
-	try {
-		const { id } = req.params;
+	res.status(200).json(updatedContact);
+});
 
-		if (Object.keys(req.body).length === 0) {
-			throw HttpError(400, 'Body must have at least one field');
-		}
+const favoriteContact = ctrlWrapper(async (req, res) => {
+	const { id } = req.params;
 
-		const [updated] = await contactsService.updateContact(id, req.body);
+	const favoriteContact = await updateStatusContact(id, req.body);
 
-		if (!updated) {
-			throw HttpError(404);
-		}
-		const updatedContact = await contactsService.getContactById(id);
-		res.status(200).json(updatedContact);
-	} catch (error) {
-		next(error);
+	if (!favoriteContact) {
+		throw HttpError(404);
 	}
-};
 
-export const updateFavoriteStatus = async (req, res, next) => {
-	try {
+	res.status(200).json(favoriteContact);
+});
 
-		const id = req.params.id;
-		const [updated] = await contactsService.updateContact(id, req.body);
-
-		if (!updated) {
-			throw HttpError(404);
-		}
-		const updatedContact = await contactsService.getContactById(id);
-		res.status(200).json(updatedContact);
-	} catch (error) {
-		next(error);
-	}
+export {
+	getAllContacts,
+	getOneContact,
+	deleteContact,
+	createContact,
+	updateContact,
+	favoriteContact,
 };
