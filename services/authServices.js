@@ -1,11 +1,17 @@
 import bcrypt from "bcrypt";
-import Users from "../db/models/Users.js";
+import UserData from "../db/models/Users.js";
+import gravatar from "gravatar";
 
 const signUp = async (data) => {
 	try {
-		const { password } = data;
+		const { password, email } = data;
 		const hashPassword = await bcrypt.hash(password, 10);
-		return await Users.create({ ...data, password: hashPassword });
+		const avatarURL = gravatar.url(email, { protocol: "https" });
+		return await UserData.create({
+			...data,
+			password: hashPassword,
+			avatarURL,
+		});
 	} catch (error) {
 		if (error?.parent?.code === "23505") {
 			error.message = "Email in use";
@@ -15,12 +21,12 @@ const signUp = async (data) => {
 };
 
 const findUser = (query) =>
-	Users.findOne({
+	UserData.findOne({
 		where: query,
 	});
 
 const updateUser = async (query, data) => {
-	const updatedUser = await Users.update(data, {
+	const updatedUser = await UserData.update(data, {
 		where: query,
 	});
 

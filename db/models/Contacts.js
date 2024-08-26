@@ -2,7 +2,8 @@ import { DataTypes } from "sequelize";
 import sequelize from "../sequelize.js";
 
 const Contacts = sequelize.define(
-	'contact', {
+	"contact",
+	{
 		name: {
 			type: DataTypes.STRING,
 			allowNull: false,
@@ -23,6 +24,9 @@ const Contacts = sequelize.define(
 			type: DataTypes.INTEGER,
 			allowNull: false,
 		},
+	},
+	{
+		timestamps: false,
 	}
 );
 

@@ -1,5 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import * as fs from "node:fs/promises";
+import path from "node:path";
 
 import { ctrlWrapper } from "../decorators/ctrlWrapper.js";
 
@@ -77,4 +79,29 @@ const changeSubscription = ctrlWrapper(async (req, res) => {
 	});
 });
 
-export { registerUser, logIn, logOut, getCurrent, changeSubscription };
+const updateAvatar = ctrlWrapper(async (req, res) => {
+	const { id } = req.user;
+
+	const avatarPath = path.resolve("public", "avatars");
+	const { path: oldPath, filename } = req.file;
+	const newPath = path.join(avatarPath, filename);
+
+	await fs.rename(oldPath, newPath);
+
+	const avatar = path.join("avatars", filename);
+
+	await updateUser({ id }, { avatarURL: avatar });
+
+	res.status(200).json({
+		avatarURL: avatar,
+	});
+});
+
+export {
+	registerUser,
+	logIn,
+	logOut,
+	getCurrent,
+	changeSubscription,
+	updateAvatar,
+};
