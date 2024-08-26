@@ -19,6 +19,10 @@ const Contacts = sequelize.define(
 			type: DataTypes.BOOLEAN,
 			defaultValue: false,
 		},
+		owner: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+		},
 	}
 );
 
