@@ -1,60 +1,33 @@
-import User from "../db/models/Contacts.js";
+import Contact from "../db/models/Contact.js";
 
-const listContacts = (query = {}, pagination = {}) => {
-	const { page, limit } = pagination;
+export const getAllContacts = (query = {}, pagination = {}) => {
+	const { page = 1, limit = 20 } = pagination;
 	const normalizedLimit = Number(limit);
 	const offset = (Number(page) - 1) * normalizedLimit;
-	return User.findAll({
+
+	return Contact.findAll({
 		where: query,
-		limit: normalizedLimit,
 		offset,
+		limit: normalizedLimit,
+		order: [["id", "asc"]],
 	});
 };
+export const getOneContact = (query) => Contact.findOne({ where: query });
 
-const getContactById = (contactId) => User.findByPk(contactId);
+export const createContact = (data) => Contact.create(data);
 
-const removeContact = async (id) => {
-	const contactPreparedToDeletion = await getContactById(id);
+export const removeContact = async (query) => Contact.destroy({ where: query });
 
-	const deletedContactStatus = await User.destroy({
-		where: {
-			id,
-		},
-	});
-
-	return deletedContactStatus ? contactPreparedToDeletion : null;
+export const updateContact = async (query, updatedData) => {
+	const contact = await getOneContact(query);
+	if (!contact) {
+		return null;
+	}
+	return Contact.update(updatedData, { returning: true });
 };
 
-const addContact = (data) => User.create(data);
+export const updateStatusContact = async (id, { favorite }) => {
+	await Contact.update({ favorite }, { where: { id } });
 
-const renewContact = async (id, data) => {
-	const contactUpdateStatus = await User.update(data, {
-		where: {
-			id,
-		},
-	});
-
-	return contactUpdateStatus ? await getContactById(id) : null;
-};
-
-const updateStatusContact = async (id, data) => {
-	const contactUpdateStatus = await User.update(
-		{ favorite: data.favorite },
-		{
-			where: {
-				id,
-			},
-		},
-	);
-
-	return contactUpdateStatus ? await getContactById(id) : null;
-};
-
-export {
-	listContacts,
-	getContactById,
-	removeContact,
-	addContact,
-	renewContact,
-	updateStatusContact,
+	return await getOneContact(id);
 };

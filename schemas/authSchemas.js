@@ -1,13 +1,15 @@
 import Joi from "joi";
-import { emailPatterValidation } from "../constants/constants.js";
+import { emailRegexp } from "../constants/constants.js";
 
-const authSignUpSchemas = Joi.object({
+export const registerSchema = Joi.object({
 	password: Joi.string().min(6).required(),
-	email: Joi.string().pattern(emailPatterValidation).required(),
+	email: Joi.string().pattern(emailRegexp).required(),
+	subscription: Joi.string().optional(),
+	avatarURL: Joi.string(),
 });
 
-const authSubscriptionSchemas = Joi.object({
-	favorite: Joi.string().valid("starter", "pro", "business").required(),
+export const mailSchema = Joi.object({
+	email: Joi.string().pattern(emailRegexp).required(),
 });
 
-export { authSignUpSchemas, authSubscriptionSchemas };
+export default { registerSchema, mailSchema };

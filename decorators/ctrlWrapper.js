@@ -1,10 +1,10 @@
 import { ValidationError } from "sequelize";
 import HttpError from "../helpers/HttpError.js";
 
-export const ctrlWrapper = (controller) => {
-	return async (req, res, next) => {
+const ctrlWrapper = (ctrl) => {
+	const func = async (req, res, next) => {
 		try {
-			await controller(req, res, next);
+			await ctrl(req, res, next);
 		} catch (error) {
 			if (error?.parent?.code === "23505") {
 				return next(HttpError(409, error.message));
@@ -15,6 +15,7 @@ export const ctrlWrapper = (controller) => {
 			next(error);
 		}
 	};
+	return func;
 };
 
-ctrlWrapper
+export default ctrlWrapper;
