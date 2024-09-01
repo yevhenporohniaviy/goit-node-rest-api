@@ -1,6 +1,6 @@
 import bcryptjs from "bcryptjs";
 import { nanoid } from "nanoid";
-import User from "../db/models/User.js";
+import User from "../db/models/Users.js";
 import sendMail from "../helpers//sendMail.js";
 
 const { BASE_URL } = process.env;

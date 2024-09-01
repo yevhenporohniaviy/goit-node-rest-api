@@ -1,4 +1,4 @@
-import Contact from "../db/models/Contact.js";
+import Contact from "../db/models/Contacts.js";
 
 export const getAllContacts = (query = {}, pagination = {}) => {
 	const { page = 1, limit = 20 } = pagination;
