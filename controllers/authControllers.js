@@ -1,107 +1,177 @@
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import * as fs from "node:fs/promises";
+import gravatar from "gravatar";
 import path from "node:path";
-
-import { ctrlWrapper } from "../decorators/ctrlWrapper.js";
-
-import { signUp, findUser, updateUser } from "../services/authServices.js";
+import * as fs from "node:fs/promises";
+import * as authServices from "../services/authServices.js";
+import ctrlWrapper from "../decorators/ctrlWrapper.js";
 import HttpError from "../helpers/HttpError.js";
+import bcryptjs from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { getAllContacts } from "../services/contactsServices.js";
 
-const registerUser = ctrlWrapper(async (req, res) => {
-	const newUser = await signUp(req.body);
+const { JWT_SECRET } = process.env;
+const avatarsPath = path.resolve("public", "avatars");
 
-	res.status(201).json({
-		user: {
-			email: newUser.email,
-			subscription: newUser.subscription,
-		},
-	});
-});
+const register = async (req, res, next) => {
+	try {
+		const { subscription = "starter", ...userData } = req.body;
+		const gravatarUrl = gravatar.url(
+			userData.email,
+			{
+				s: "100",
+				r: "pg",
+				d: "identicon",
+			},
+			true
+		);
 
-const logIn = ctrlWrapper(async (req, res) => {
-	const { email, password } = req.body;
+		const newUser = await authServices.register({
+			...userData,
+			subscription,
+			avatarURL: gravatarUrl,
+		});
 
-	const user = await findUser({ email });
+		res.status(201).json({
+			user: {
+				email: newUser.email,
+				subscription: newUser.subscription,
+			},
+		});
+	} catch (error) {
+		if (error?.message === "Email in use") {
+			return res.status(409).json({ message: error.message });
+		}
+		next(error);
+	}
+};
 
-	const comparePassword = await bcrypt.compare(password, user.password);
-
-	if (!user || !comparePassword) {
-		throw HttpError(401, "Email or password is wrong");
+const verify = async (req, res) => {
+	const { verificationToken } = req.params;
+	const user = await authServices.findUser({ verificationToken });
+	if (!user) {
+		throw HttpError(404, "User not found");
 	}
 
-	const { JWT_SECRET } = process.env;
+	await authServices.updateUser(
+		{ verificationToken },
+		{
+			verify: true,
+			verificationToken: null,
+		}
+	);
 
-	const payload = {
-		id: user.id,
-	};
+	res.json({ message: "Verification successful" });
+};
 
-	const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });
+const resendVerify = async (req, res) => {
+	const { email } = req.body;
+	const user = await authServices.findUser({ email });
+	if (!user) {
+		throw HttpError(404, "Email not found");
+	}
+	if (user.verify) {
+		throw HttpError(400, "Verification has already been passed");
+	}
 
-	const renewedUser = await updateUser({ email }, { token });
+	await authServices.sendVerifyMail(user.email, user.verificationToken);
 
-	res.status(200).json({
-		token: renewedUser.token,
-		user: {
-			email: renewedUser.email,
-			subscription: renewedUser.subscription,
-		},
+	res.json({ message: "Verification email sent" });
+};
+
+const login = async (req, res) => {
+	const { email, password } = req.body;
+	const user = await authServices.findUser({ email });
+	if (!user) {
+		throw HttpError(401, "Email is wrong");
+	}
+	if (!user.verify) {
+		throw HttpError(401, "Email not verified");
+	}
+	const passwordCompare = await bcryptjs.compare(password, user.password);
+	if (!passwordCompare) {
+		throw HttpError(401, "Password is wrong");
+	}
+
+	const { id, subscription, avatarURL } = user;
+	const payload = { id };
+	const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "48h" });
+	await authServices.updateUser({ id }, { token });
+
+	res.json({
+		token,
+		user: { email, subscription, avatarURL },
 	});
-});
+};
 
-const logOut = ctrlWrapper(async (req, res) => {
+const logout = async (req, res) => {
 	const { id } = req.user;
-	await updateUser({ id }, { token: " " });
+	await authServices.updateUser({ id }, { token: "" });
 
-	res.status(204).json({ message: "No Content" });
-});
+	res.status(204).end();
+};
 
-const getCurrent = ctrlWrapper(async (req, res) => {
-	const { email, subscription } = req.user;
+const getCurrent = async (req, res) => {
+	const { id, email, subscription, avatarURL } = req.user;
+	const contacts = await getAllContacts({ owner: id });
 
-	res.status(200).json({
+	res.json({
 		email,
 		subscription,
+		avatarURL,
+		contacts,
 	});
-});
+};
 
-const changeSubscription = ctrlWrapper(async (req, res) => {
-	const { id } = req.user;
-	const { favorite } = req.body;
+const changePlan = async (req, res, next) => {
+	const { user } = req;
+	const { subscription } = req.body;
 
-	const updatedSubscription = await updateUser({ id }, { favorite });
+	if (!["starter", "pro", "business"].includes(subscription)) {
+		return next(HttpError(400, "Invalid subscription plan"));
+	}
 
-	res.status(200).json({
-		user: {
-			email: updatedSubscription.email,
-			subscription: updatedSubscription.subscription,
-		},
-	});
-});
+	try {
+		const updatedUser = await authServices.updateUser(
+			{ id: user.id },
+			{ subscription }
+		);
 
-const updateAvatar = ctrlWrapper(async (req, res) => {
-	const { id } = req.user;
+		if (!updatedUser) {
+			return next(HttpError(404, "User not found"));
+		}
 
-	const avatarPath = path.resolve("public", "avatars");
-	const { path: oldPath, filename } = req.file;
-	const newPath = path.join(avatarPath, filename);
+		res.json({
+			email: updatedUser.email,
+			subscription: updatedUser.subscription,
+		});
+	} catch (error) {
+		next(HttpError(401, error.message));
+	}
+};
 
-	await fs.rename(oldPath, newPath);
+const updateURL = async (req, res, next) => {
+	try {
+		const { id: user } = req.user;
+		const { path: oldPath, filename } = req.file;
+		const newPath = path.join(avatarsPath, filename);
+		await fs.rename(oldPath, newPath);
+		const avatarURL = path.join("avatars", filename);
+		const updatedStatus = await authServices.updateUser(
+			{ id: user },
+			{ avatarURL }
+		);
+		res.json({ avatarURL: updatedStatus.avatarURL });
+	} catch (error) {
+		next(error);
+	}
+};
 
-	const avatar = path.join("avatars", filename);
-
-	await updateUser({ id }, { avatarURL: avatar });
-
-	res.status(200).json({
-		avatarURL: avatar,
-	});
-});
-
-export {
-	registerUser,
-	logIn,
-	logOut,
-	getCurrent,
-	changeSubscription,
-	updateAvatar,
+export default {
+	register: ctrlWrapper(register),
+	verify: ctrlWrapper(verify),
+	resendVerify: ctrlWrapper(resendVerify),
+	login: ctrlWrapper(login),
+	logout: ctrlWrapper(logout),
+	getCurrent: ctrlWrapper(getCurrent),
+	changePlan: ctrlWrapper(changePlan),
+	updateURL: ctrlWrapper(updateURL),
 };

@@ -1,90 +1,87 @@
-import {
-	listContacts,
-	getContactById,
-	removeContact,
-	addContact,
-	renewContact,
-	updateStatusContact,
-} from "../services/contactsServices.js";
-
+import * as s from "../services/contactsServices.js";
 import HttpError from "../helpers/HttpError.js";
-import { ctrlWrapper } from "../decorators/ctrlWrapper.js";
+import ctrlWrapper from "../decorators/ctrlWrapper.js";
+import EmptyRequestBodyError from "../helpers/EmptyRequestBodyError.js";
 
-const getAllContacts = ctrlWrapper(async (req, res) => {
-	const { page = 1, limit = 20, favorite } = req.query;
+const getContacts = async (req, res) => {
+	const { id: owner } = req.user;
+	const { page = 1, limit = 20 } = req.query;
+	const result = await s.getAllContacts({ owner }, { page, limit });
+	res.json(result);
+};
 
-	const contactsList = await listContacts(
-		favorite !== undefined ? { favorite } : {},
-		{
-			page,
-			limit,
-		},
-	);
+const getTrueFavorites = async (req, res) => {
+	const { id: owner } = req.user;
+	const result = await s.getAllContacts({ owner, favorite: true });
+	res.json(result);
+};
 
-	res.status(200).json(contactsList);
-});
-
-const getOneContact = ctrlWrapper(async (req, res) => {
+const getOneContact = async (req, res) => {
 	const { id } = req.params;
-	const foundedContact = await getContactById(id);
+	const { id: owner } = req.user;
 
-	if (!foundedContact) {
-		throw HttpError(404);
+	const result = await s.getOneContact({ id, owner });
+	if (!result) {
+		throw HttpError(404, `Contact with id ${id} not found`);
 	}
-	res.status(200).json(foundedContact);
-});
+	res.json(result);
+};
 
-const deleteContact = ctrlWrapper(async (req, res) => {
+const deleteContact = async (req, res) => {
 	const { id } = req.params;
+	const { id: owner } = req.user;
 
-	const removedContact = await removeContact(id);
-
-	if (!removedContact) {
-		throw HttpError(404);
-	}
-	res.status(200).json(removedContact);
-});
-
-const createContact = ctrlWrapper(async (req, res) => {
-	const { id } = req.user.dataValues;
-	const addedContact = await addContact({ ...req.body, owner: id });
-
-	res.status(201).json(addedContact);
-});
-
-const updateContact = ctrlWrapper(async (req, res) => {
-	if (Object.keys(req.body).length === 0) {
-		throw HttpError(400, "Body must have at least one field");
+	const result = await s.removeContact({ id, owner });
+	if (!result) {
+		throw HttpError(404, `Contact with id ${id} not found`);
 	}
 
+	res.json(`Contact with id ${id} removed successfuly`);
+};
+
+const createContact = async (req, res) => {
+	const { id: owner } = req.user;
+
+	const result = await s.createContact({ ...req.body, owner });
+	res.status(201).json(result);
+};
+
+const updateContactById = async (req, res) => {
 	const { id } = req.params;
+	const { id: owner } = req.user;
 
-	const updatedContact = await renewContact(id, req.body);
+	const updatedData = req.body;
 
+	EmptyRequestBodyError(updatedData);
+
+	const updatedContact = await s.updateContact({ id, owner }, updatedData);
 	if (!updatedContact) {
-		throw HttpError(404);
+		throw HttpError(404, `Contact with id: ${id} not found`);
 	}
+	res.json(updatedContact);
+};
 
-	res.status(200).json(updatedContact);
-});
-
-const favoriteContact = ctrlWrapper(async (req, res) => {
+const updateStatusContact = async (req, res) => {
 	const { id } = req.params;
+	const { favorite } = req.body;
+	const { id: owner } = req.user;
 
-	const favoriteContact = await updateStatusContact(id, req.body);
+	EmptyRequestBodyError({ favorite });
 
-	if (!favoriteContact) {
-		throw HttpError(404);
+	const updatedStatus = await s.updateContact({ id, owner }, { favorite });
+	if (!updatedStatus) {
+		throw HttpError(404, `Contact with id: ${id} not found`);
 	}
 
-	res.status(200).json(favoriteContact);
-});
+	res.json(updatedStatus);
+};
 
-export {
-	getAllContacts,
-	getOneContact,
-	deleteContact,
-	createContact,
-	updateContact,
-	favoriteContact,
+export default {
+	getContacts: ctrlWrapper(getContacts),
+	getOneContact: ctrlWrapper(getOneContact),
+	deleteContact: ctrlWrapper(deleteContact),
+	createContact: ctrlWrapper(createContact),
+	updateContactById: ctrlWrapper(updateContactById),
+	updateStatusContact: ctrlWrapper(updateStatusContact),
+	getTrueFavorites: ctrlWrapper(getTrueFavorites),
 };
