@@ -19,7 +19,7 @@ export const createContact = (data) => Contact.create(data);
 export const removeContact = async (query) => Contact.destroy({ where: query });
 
 export const updateContact = async (query, updatedData) => {
-	const contact = await getOneContact(query);
+	const contact = await getOneContact(query); //test
 	if (!contact) {
 		return null;
 	}
