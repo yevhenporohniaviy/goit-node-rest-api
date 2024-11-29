@@ -6,7 +6,7 @@ import {
   createContactSchema,
   updateContactSchema,
   updateFavoriteSchema,
-} from "../schemas/contactsSchemas.js";
+} from "../schemas/чcontactsSchemas.js";
 
 const addMiddleWare = validateBody(createContactSchema);
 const updMiddleWare = validateBody(updateContactSchema);
